@@ -17,6 +17,13 @@ def ft_count(values):
     return count
 
 
+def ft_sum(values):
+    total = 0
+    for value in values:
+        total += value
+    return total
+
+
 def read_csv(filename):
   with open(filename, "r", encoding="utf-8") as f:
     reader = csv.DictReader(f)
@@ -40,8 +47,8 @@ def compute_stats(values):
   sorted_values = sorted(values)
   return {
     "Count": ft_count(values),
-    "Mean": sum(values) / ft_count(values) if ft_count(values) > 0 else 0,
-    "Std": (sum((x - sum(values) / ft_count(values)) ** 2 for x in values) / ft_count(values)) ** 0.5 if ft_count(values) > 0 else 0,
+    "Mean": ft_sum(values) / ft_count(values) if ft_count(values) > 0 else 0,
+    "Std": (ft_sum((x - ft_sum(values) / ft_count(values)) ** 2 for x in values) / ft_count(values)) ** 0.5 if ft_count(values) > 0 else 0,
     "Min": sorted_values[0] if ft_count(values) > 0 else 0,
     "25%": sorted_values[int(0.25 * ft_count(values))] if ft_count(values) > 0 else 0,
     "50%": sorted_values[int(0.5 * ft_count(values))] if ft_count(values) > 0 else 0,
