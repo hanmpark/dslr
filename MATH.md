@@ -11,24 +11,26 @@ The sum of all values divided by the count:
 $$\bar{x} = \frac{1}{n} \sum_{i=1}^{n} x_i$$
 
 ### Variance and Standard Deviation
-Variance measures the average squared deviation from the mean. We use the **sample variance** (dividing by `n - 1`, known as Bessel's correction) to get an unbiased estimate:
+Variance measures the average squared deviation from the mean. In this project, the code uses the **population variance** form, dividing by `n`:
 
-$$s^2 = \frac{1}{n - 1} \sum_{i=1}^{n} (x_i - \bar{x})^2$$
+$$\sigma^2 = \frac{1}{n} \sum_{i=1}^{n} (x_i - \bar{x})^2$$
 
 Standard deviation is the square root of variance — it brings the unit back to the original scale:
 
-$$s = \sqrt{s^2}$$
+$$\sigma = \sqrt{\sigma^2}$$
+
+This matches the implementation in `describe.py`, `histogram.py`, `pair_plot.py`, and the normalization step in `logreg_train.py`.
 
 ### Percentiles (Quantiles)
 The **p-th percentile** is the value below which p% of the data falls. To compute it:
 
 1. Sort the values in ascending order.
-2. Compute the rank index: `i = p / 100 * (n - 1)` (zero-based, continuous).
-3. If `i` is not an integer, **linearly interpolate** between the two adjacent values:
+2. Compute the integer index used by the code: `i = int(p / 100 * n)`.
+3. Return the sorted value at that index:
 
-$$Q_p = x_{\lfloor i \rfloor} + (i - \lfloor i \rfloor) \cdot (x_{\lceil i \rceil} - x_{\lfloor i \rfloor})$$
+$$Q_p = x_i$$
 
-This matches pandas' default `linear` interpolation method. The three key percentiles used are:
+This is a simple nearest-rank style approximation, not pandas' default linear interpolation. The three key percentiles used are:
 - **Q1 (25%)** — lower quartile
 - **Q2 (50%)** — median
 - **Q3 (75%)** — upper quartile
@@ -82,7 +84,11 @@ The model computes $z = \theta^T x$ (a linear combination of features and weight
 
 $$h_\theta(x) = \sigma(\theta^T x) = \frac{1}{1 + e^{-\theta^T x}}$$
 
-**Numerical stability note:** Clip $z$ to $[-500, 500]$ before computing `exp(-z)` to avoid floating-point overflow.
+**Numerical stability note:** The code uses two algebraically equivalent branches to avoid overflow:
+- if `z >= 0`: compute `1 / (1 + exp(-z))`
+- if `z < 0`: compute `exp(z) / (1 + exp(z))`
+
+This avoids calling `exp()` with a very large positive value.
 
 ### 4.3 The Hypothesis
 
@@ -113,7 +119,7 @@ The partial derivative of $J(\theta)$ with respect to each weight $\theta_j$ is:
 
 $$\frac{\partial J}{\partial \theta_j} = \frac{1}{m} \sum_{i=1}^{m} \left( h_\theta(x^{(i)}) - y^{(i)} \right) x_j^{(i)}$$
 
-In matrix form (more efficient with numpy):
+In matrix form:
 
 $$\nabla_\theta J = \frac{1}{m} X^T (h - y)$$
 
@@ -121,6 +127,8 @@ Where:
 - $X \in \mathbb{R}^{m \times (d+1)}$ = feature matrix (with bias column)
 - $h \in \mathbb{R}^m$ = vector of predicted probabilities
 - $y \in \mathbb{R}^m$ = vector of true labels
+
+The implementation computes this gradient manually with Python loops instead of using NumPy, to keep the learning step explicit.
 
 ### 4.6 Gradient Descent
 
@@ -170,7 +178,7 @@ Fill NaN with column mean (computed on training set only)
   ↓
 Z-score normalize each feature  →  save (μ, σ) per feature
   ↓
-Add bias column (x₀ = 1)
+Use a bias weight w[0] equivalent to x₀ = 1
   ↓
 For each house k:
     set y = 1 where house == k, else 0
