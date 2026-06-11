@@ -1,197 +1,904 @@
-# MATH.md — Mathematical Foundations of DSLR
+# DSLR - Maths expliquees simplement
 
-## 1. Descriptive Statistics
+Ce fichier explique les notions mathematiques du projet sans partir directement dans les grosses formules.
 
-### Count
-The number of non-missing values in a column.
+L'idee generale du projet est :
 
-### Mean (Arithmetic Average)
-The sum of all values divided by the count:
-
-$$\bar{x} = \frac{1}{n} \sum_{i=1}^{n} x_i$$
-
-### Variance and Standard Deviation
-Variance measures the average squared deviation from the mean. In this project, the code uses the **population variance** form, dividing by `n`:
-
-$$\sigma^2 = \frac{1}{n} \sum_{i=1}^{n} (x_i - \bar{x})^2$$
-
-Standard deviation is the square root of variance — it brings the unit back to the original scale:
-
-$$\sigma = \sqrt{\sigma^2}$$
-
-This matches the implementation in `describe.py`, `histogram.py`, `pair_plot.py`, and the normalization step in `logreg_train.py`.
-
-### Percentiles (Quantiles)
-The **p-th percentile** is the value below which p% of the data falls. To compute it:
-
-1. Sort the values in ascending order.
-2. Compute the integer index used by the code: `i = int(p / 100 * n)`.
-3. Return the sorted value at that index:
-
-$$Q_p = x_i$$
-
-This is a simple nearest-rank style approximation, not pandas' default linear interpolation. The three key percentiles used are:
-- **Q1 (25%)** — lower quartile
-- **Q2 (50%)** — median
-- **Q3 (75%)** — upper quartile
-
----
-
-## 2. Pearson Correlation Coefficient
-
-Used in `scatter_plot.py` to find the two most similar features. It measures the **linear relationship** between two variables, ranging from -1 (perfect negative) to +1 (perfect positive):
-
-$$r = \frac{\sum_{i=1}^{n}(x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum_{i=1}^{n}(x_i - \bar{x})^2} \cdot \sqrt{\sum_{i=1}^{n}(y_i - \bar{y})^2}}$$
-
-We look for the pair with `|r|` closest to 1, meaning their distributions are the most alike.
-
----
-
-## 3. Feature Standardization (Z-score Normalization)
-
-Before training, each feature is rescaled so that it has **mean 0** and **standard deviation 1**:
-
-$$x'_i = \frac{x_i - \mu}{\sigma}$$
-
-Where:
-- $\mu$ is the **training set mean** for that feature
-- $\sigma$ is the **training set standard deviation** for that feature
-
-**Why it matters:** Gradient descent converges much faster when all features are on the same scale. Without it, features with large ranges dominate the gradient updates.
-
-**Important:** The same $\mu$ and $\sigma$ computed on the training set must be saved and reused to normalize the test set. Never recompute normalization statistics from the test data.
-
----
-
-## 4. Logistic Regression
-
-### 4.1 The Problem: Binary Classification
-
-Logistic regression predicts the probability that a sample belongs to class 1 (vs. class 0). Unlike linear regression, the output is bounded between 0 and 1.
-
-### 4.2 The Sigmoid Function
-
-The **sigmoid** (logistic) function maps any real number to `(0, 1)`:
-
-$$\sigma(z) = \frac{1}{1 + e^{-z}}$$
-
-Key properties:
-- $\sigma(0) = 0.5$
-- As $z \to +\infty$, $\sigma(z) \to 1$
-- As $z \to -\infty$, $\sigma(z) \to 0$
-
-The model computes $z = \theta^T x$ (a linear combination of features and weights), then squashes it through the sigmoid to get a probability:
-
-$$h_\theta(x) = \sigma(\theta^T x) = \frac{1}{1 + e^{-\theta^T x}}$$
-
-**Numerical stability note:** The code uses two algebraically equivalent branches to avoid overflow:
-- if `z >= 0`: compute `1 / (1 + exp(-z))`
-- if `z < 0`: compute `exp(z) / (1 + exp(z))`
-
-This avoids calling `exp()` with a very large positive value.
-
-### 4.3 The Hypothesis
-
-Given a feature vector $x \in \mathbb{R}^{d+1}$ (with a bias term $x_0 = 1$) and a weight vector $\theta \in \mathbb{R}^{d+1}$:
-
-$$h_\theta(x) = \sigma\left(\sum_{j=0}^{d} \theta_j x_j\right)$$
-
-The output is interpreted as: **"the probability that sample $x$ belongs to class 1."**
-
-### 4.4 The Cost Function (Log-Loss / Binary Cross-Entropy)
-
-We can't use mean squared error for classification — the resulting cost surface has many local minima. Instead, we use the **log-loss**:
-
-$$J(\theta) = -\frac{1}{m} \sum_{i=1}^{m} \left[ y^{(i)} \log(h_\theta(x^{(i)})) + (1 - y^{(i)}) \log(1 - h_\theta(x^{(i)})) \right]$$
-
-Where:
-- $m$ = number of training samples
-- $y^{(i)} \in \{0, 1\}$ = true label for sample $i$
-- $h_\theta(x^{(i)})$ = predicted probability for sample $i$
-
-**Intuition:**
-- When $y = 1$: the cost is $-\log(h)$. If $h \to 1$ (correct), cost $\to 0$. If $h \to 0$ (wrong), cost $\to \infty$.
-- When $y = 0$: the cost is $-\log(1 - h)$. If $h \to 0$ (correct), cost $\to 0$. If $h \to 1$ (wrong), cost $\to \infty$.
-
-### 4.5 Gradient of the Cost Function
-
-The partial derivative of $J(\theta)$ with respect to each weight $\theta_j$ is:
-
-$$\frac{\partial J}{\partial \theta_j} = \frac{1}{m} \sum_{i=1}^{m} \left( h_\theta(x^{(i)}) - y^{(i)} \right) x_j^{(i)}$$
-
-In matrix form:
-
-$$\nabla_\theta J = \frac{1}{m} X^T (h - y)$$
-
-Where:
-- $X \in \mathbb{R}^{m \times (d+1)}$ = feature matrix (with bias column)
-- $h \in \mathbb{R}^m$ = vector of predicted probabilities
-- $y \in \mathbb{R}^m$ = vector of true labels
-
-The implementation computes this gradient manually with Python loops instead of using NumPy, to keep the learning step explicit.
-
-### 4.6 Gradient Descent
-
-Gradient descent iteratively updates the weights in the direction that decreases the cost:
-
-$$\theta := \theta - \alpha \cdot \nabla_\theta J(\theta)$$
-
-Where $\alpha$ is the **learning rate** — a hyperparameter that controls the step size.
-
-- Too large: overshoots the minimum, diverges.
-- Too small: converges too slowly.
-- Typical range with standardized features: `0.01 – 1.0`.
-
-The loop runs for a fixed number of iterations (e.g., 500–1000).
-
----
-
-## 5. One-vs-All (OvR) Strategy
-
-Since there are **4 Hogwarts houses**, we train **4 separate binary classifiers**, one per house:
-
-| Classifier | Positive class | Negative class |
-|------------|---------------|----------------|
-| Classifier 1 | Gryffindor (1) | All others (0) |
-| Classifier 2 | Hufflepuff (1) | All others (0) |
-| Classifier 3 | Ravenclaw (1)  | All others (0) |
-| Classifier 4 | Slytherin (1)  | All others (0) |
-
-Each classifier $k$ learns its own weight vector $\theta^{(k)}$.
-
-### Prediction
-
-At prediction time, run all 4 classifiers and assign the house with the **highest probability**:
-
-$$\hat{y} = \arg\max_{k} \; h_{\theta^{(k)}}(x) = \arg\max_{k} \; \sigma\left(\theta^{(k)T} x\right)$$
-
----
-
-## 6. Summary of the Full Pipeline
-
+```text
+notes des eleves -> modele -> maison Hogwarts predite
 ```
-Raw CSV
-  ↓
-Drop non-numerical columns (Name, Birthday, Best Hand)
-  ↓
-Fill NaN with column mean (computed on training set only)
-  ↓
-Z-score normalize each feature  →  save (μ, σ) per feature
-  ↓
-Use a bias weight w[0] equivalent to x₀ = 1
-  ↓
-For each house k:
-    set y = 1 where house == k, else 0
-    initialize θ⁽ᵏ⁾ = 0
-    run gradient descent for N iterations
-    save θ⁽ᵏ⁾
-  ↓
-Save { θ⁽ᵏ⁾, μ, σ } → weights.json
-  ↓
-At prediction:
-    normalize test data with saved μ, σ
-    compute h⁽ᵏ⁾(x) for all 4 classifiers
-    assign house = argmax over k
-  ↓
-Output houses.csv
+
+Les notes sont les **features**.
+La maison est le **label** a predire.
+
+---
+
+# 1. Les mots importants
+
+## Feature
+
+Une feature est une information donnee au modele.
+
+Dans DSLR, les features sont les notes :
+
+```text
+Astronomy
+Herbology
+Potions
+Charms
+Flying
+...
+```
+
+Exemple :
+
+```text
+Eleve A :
+Astronomy = 12
+Potions = 8
+Charms = 15
+```
+
+Ces valeurs sont donnees au modele pour l'aider a deviner la maison.
+
+## Label / target
+
+Le label est ce que le modele doit predire.
+
+Dans DSLR :
+
+```text
+Hogwarts House
+```
+
+Exemple :
+
+```text
+features = notes de l'eleve
+label = Gryffindor
+```
+
+Pendant l'entrainement, le modele voit les features ET la vraie maison.
+Pendant la prediction, il voit seulement les features et doit deviner la maison.
+
+## Modele
+
+Un modele est une fonction qui apprend une relation entre les entrees et la sortie.
+
+Dans ce projet :
+
+```text
+entrees : notes
+sortie : maison
+```
+
+Le modele apprend par exemple que certaines combinaisons de notes ressemblent plus a Ravenclaw, Gryffindor, Hufflepuff ou Slytherin.
+
+## Poids
+
+Un poids indique l'importance d'une feature dans la decision.
+
+Exemple imaginaire pour un modele Gryffindor :
+
+```text
+Potions a un poids fort
+Flying a un poids faible
+```
+
+Cela veut dire que `Potions` influence plus la prediction que `Flying` pour ce modele.
+
+## Biais
+
+Le biais est une valeur de base ajoutee au calcul du modele.
+
+Tu peux le voir comme un point de depart avant de regarder les features.
+
+Dans le code, le biais est :
+
+```python
+w[0]
+```
+
+---
+
+# 2. Statistiques descriptives dans `describe.py`
+
+Le but de `describe.py` est de comprendre les donnees avant de faire du machine learning.
+
+Il affiche :
+
+```text
+Count
+Mean
+Std
+Min
+25%
+50%
+75%
+Max
+```
+
+## Count
+
+`Count` est le nombre de valeurs disponibles dans une colonne.
+
+Exemple :
+
+```text
+Potions : 10, 12, vide, 15
+Count = 3
+```
+
+La valeur vide ne compte pas.
+
+## Mean
+
+`Mean` est la moyenne.
+
+Recette :
+
+```text
+on additionne les valeurs
+on divise par le nombre de valeurs
+```
+
+Exemple :
+
+```text
+10, 12, 14
+somme = 36
+nombre de valeurs = 3
+moyenne = 36 / 3 = 12
+```
+
+La moyenne donne une valeur centrale.
+
+## Std, ou ecart type
+
+`Std` veut dire standard deviation, en francais **ecart type**.
+
+Il mesure si les valeurs sont proches ou loin de la moyenne.
+
+Exemple 1 :
+
+```text
+10, 10, 10
+moyenne = 10
+ecart type = 0
+```
+
+Toutes les valeurs sont exactement sur la moyenne.
+Il n'y a aucune dispersion.
+
+Exemple 2 :
+
+```text
+5, 10, 15
+moyenne = 10
+ecart type environ 4.08
+```
+
+Les valeurs sont autour de la moyenne, mais elles s'en eloignent.
+L'ecart type resume cette dispersion.
+
+Pourquoi on met les ecarts au carre ?
+
+Parce que les ecarts positifs et negatifs s'annulent sinon.
+
+```text
+valeurs : 5, 10, 15
+moyenne : 10
+ecarts : -5, 0, +5
+somme des ecarts = 0
+```
+
+Si on additionne directement, on croit a tort qu'il n'y a pas de dispersion.
+
+Donc on utilise les carres :
+
+```text
+(-5)^2 = 25
+0^2 = 0
+5^2 = 25
+```
+
+Puis on fait une racine carree pour revenir dans la meme unite que les notes.
+
+Ce qu'il faut retenir :
+
+```text
+ecart type petit -> valeurs regroupees
+ecart type grand -> valeurs dispersees
+```
+
+## Min et Max
+
+`Min` est la plus petite valeur.
+`Max` est la plus grande valeur.
+
+Exemple :
+
+```text
+5, 10, 15
+Min = 5
+Max = 15
+```
+
+## 25%, 50%, 75%
+
+Ces valeurs sont les quartiles.
+
+Elles servent a comprendre comment les donnees sont reparties.
+
+On trie les valeurs :
+
+```text
+2, 4, 6, 8, 10, 12, 14, 16
+```
+
+Puis on regarde :
+
+```text
+25% -> environ le premier quart
+50% -> le milieu, aussi appele mediane
+75% -> environ les trois quarts
+```
+
+La mediane (`50%`) est utile parce qu'elle est moins sensible aux valeurs extremes que la moyenne.
+
+Exemple :
+
+```text
+10, 11, 12, 13, 1000
+```
+
+La moyenne est tiree vers `1000`.
+La mediane reste autour du centre reel des donnees.
+
+---
+
+# 3. Histogrammes dans `histogram.py`
+
+Un histogramme montre la distribution d'une feature.
+
+Il repond a la question :
+
+```text
+Combien de valeurs tombent dans chaque intervalle ?
+```
+
+Exemple :
+
+```text
+notes entre 0 et 5   -> 4 eleves
+notes entre 5 et 10  -> 20 eleves
+notes entre 10 et 15 -> 18 eleves
+notes entre 15 et 20 -> 6 eleves
+```
+
+Dans le projet, `histogram.py` superpose les distributions des 4 maisons pour chaque cours.
+
+La question du sujet est :
+
+```text
+Quel cours a une distribution homogene entre les 4 maisons ?
+```
+
+Une distribution homogene veut dire :
+
+```text
+les maisons se ressemblent sur cette feature
+```
+
+Si les 4 maisons ont presque le meme histogramme pour `Astronomy`, alors `Astronomy` ne permet pas beaucoup de les differencier.
+
+Ce qu'il faut retenir :
+
+```text
+feature homogene -> les maisons se ressemblent
+feature non homogene -> les maisons sont plus faciles a separer
+```
+
+---
+
+# 4. Scatter plot et correlation de Pearson
+
+## Pourquoi deux features ?
+
+Un scatter plot est un graphique en 2D.
+
+Il a deux axes :
+
+```text
+axe horizontal X = une feature
+axe vertical Y = une autre feature
+```
+
+Exemple :
+
+```text
+X = Potions
+Y = Charms
+```
+
+Chaque eleve devient un point :
+
+```text
+Eleve A : Potions = 10, Charms = 12 -> point (10, 12)
+Eleve B : Potions = 15, Charms = 16 -> point (15, 16)
+```
+
+On prend donc deux features parce qu'un point dans un graphique 2D a deux coordonnees.
+
+## Correlation de Pearson
+
+La correlation de Pearson mesure si deux features bougent ensemble de maniere lineaire.
+
+Elle donne un nombre entre `-1` et `1`.
+
+```text
+proche de 1  -> les deux features montent ensemble
+proche de -1 -> une feature monte quand l'autre descend
+proche de 0  -> pas de relation lineaire claire
+```
+
+Exemple avec correlation positive :
+
+```text
+Potions : 5, 10, 15
+Charms  : 6, 11, 16
+```
+
+Quand `Potions` augmente, `Charms` augmente aussi.
+La correlation est proche de `1`.
+
+Exemple avec correlation negative :
+
+```text
+Potions : 5, 10, 15
+Flying  : 15, 10, 5
+```
+
+Quand `Potions` augmente, `Flying` diminue.
+La correlation est proche de `-1`.
+
+Dans `scatter_plot.py`, le code teste toutes les paires de features et cherche la paire avec la plus forte correlation en valeur absolue.
+
+Valeur absolue veut dire :
+
+```text
+0.95 et -0.95 sont toutes les deux des relations fortes
+```
+
+## Correlation ne veut pas dire causalite
+
+Si deux features sont correlees, cela veut seulement dire qu'elles bougent ensemble.
+
+Cela ne prouve pas que l'une cause l'autre.
+
+Exemple :
+
+```text
+Les eleves bons en Potions sont souvent bons en Charms.
+```
+
+Cela ne veut pas dire :
+
+```text
+etre bon en Potions cause une bonne note en Charms.
+```
+
+Cela peut simplement vouloir dire :
+
+- certains eleves sont globalement bons;
+- les deux cours demandent des competences proches;
+- il existe un autre facteur cache.
+
+---
+
+# 5. Pair plot et F-ratio dans `pair_plot.py`
+
+## Pair plot
+
+Un pair plot est une grande grille de graphiques.
+
+Il compare toutes les features deux par deux.
+
+Dans ce projet :
+
+- la diagonale montre des histogrammes;
+- les autres cases montrent des scatter plots.
+
+But :
+
+```text
+voir quelles features separent bien les maisons
+voir quelles features sont redondantes
+```
+
+## F-ratio
+
+Le F-ratio mesure si une feature aide a separer les maisons.
+
+Il compare deux choses :
+
+```text
+variation entre les maisons
+variation a l'interieur des maisons
+```
+
+Tu peux le lire comme :
+
+```text
+F-ratio = separation entre maisons / dispersion dans les maisons
+```
+
+## Variation entre les maisons
+
+On regarde si les moyennes des maisons sont differentes.
+
+Exemple :
+
+```text
+Potions :
+Gryffindor moyenne = 5
+Hufflepuff moyenne = 10
+Ravenclaw moyenne = 15
+Slytherin moyenne = 20
+```
+
+Les maisons sont bien separees.
+
+## Variation a l'interieur des maisons
+
+On regarde si les notes sont tres dispersees dans une meme maison.
+
+Exemple :
+
+```text
+Gryffindor en Potions : 2, 5, 8, 14, 20
+```
+
+Les notes sont tres eparpillees.
+La separation est moins claire.
+
+## Interpretation du F-ratio
+
+```text
+F-ratio eleve -> bonne feature pour separer les maisons
+F-ratio faible -> feature peu utile pour classifier
+```
+
+## Features redondantes
+
+Deux features sont redondantes si elles donnent presque la meme information.
+
+Exemple :
+
+```text
+Potions : 5, 10, 15
+Charms  : 6, 11, 16
+```
+
+`Charms` ressemble presque a `Potions + 1`.
+
+Si le modele connait deja `Potions`, `Charms` ajoute peu d'information nouvelle.
+
+Dans `pair_plot.py`, le code regarde :
+
+```text
+correlation forte -> features similaires
+F-ratio -> laquelle separe le mieux les maisons
+```
+
+Si deux features sont tres correlees, le code recommande de garder celle avec le meilleur F-ratio.
+
+---
+
+# 6. Normalisation dans `logreg_train.py`
+
+Les features du dataset n'ont pas toutes la meme echelle.
+
+Exemple :
+
+```text
+Defense Against the Dark Arts : -1000 a 1000
+Astronomy : -10 a 10
+```
+
+Si on donne ces valeurs brutes au modele, la feature avec les grandes valeurs peut dominer l'apprentissage.
+
+Pour eviter ca, on normalise.
+
+## Z-score
+
+La normalisation utilisee est le z-score.
+
+Recette :
+
+```text
+valeur normalisee = (valeur - moyenne) / ecart type
+```
+
+Effet :
+
+```text
+la moyenne devient environ 0
+les valeurs sont exprimees en nombre d'ecarts types autour de la moyenne
+```
+
+Exemple :
+
+```text
+note = 15
+moyenne = 10
+ecart type = 5
+
+valeur normalisee = (15 - 10) / 5 = 1
+```
+
+Cela veut dire :
+
+```text
+cette note est 1 ecart type au-dessus de la moyenne
+```
+
+## Pourquoi sauvegarder la moyenne et l'ecart type ?
+
+Le modele est entraine avec les moyennes et ecarts types du train set.
+
+Pendant la prediction, il faut reutiliser exactement les memes valeurs.
+
+Sinon, le test set ne sera pas sur la meme echelle que le train set.
+
+C'est pour ca que `weights.json` contient :
+
+```text
+means
+stds
+```
+
+---
+
+# 7. Regression logistique
+
+Malgre son nom, la regression logistique sert souvent a faire de la classification.
+
+Dans ce projet, elle sert a predire une maison.
+
+## Etape 1 : calculer un score
+
+Le modele commence par calculer un score lineaire :
+
+```text
+score = biais + poids1 * feature1 + poids2 * feature2 + ...
+```
+
+Dans le code :
+
+```python
+z = w[0] + sum(w[j + 1] * X[i][j] for j in range(n))
+```
+
+Ce score peut etre n'importe quel nombre :
+
+```text
+-200
+-4
+0
+3
+150
+```
+
+Mais une probabilite doit etre entre `0` et `1`.
+
+## Etape 2 : passer le score dans la sigmoid
+
+La sigmoid transforme n'importe quel score en valeur entre `0` et `1`.
+
+```text
+score tres negatif -> proche de 0
+score = 0 -> 0.5
+score tres positif -> proche de 1
+```
+
+Donc :
+
+```text
+score lineaire -> sigmoid -> probabilite
+```
+
+Exemple :
+
+```text
+score = 3
+sigmoid(score) = environ 0.95
+```
+
+Le modele peut lire ca comme :
+
+```text
+forte probabilite d'appartenir a cette classe
+```
+
+## Pourquoi c'est une probabilite ?
+
+Parce que la sigmoid force la sortie a rester entre `0` et `1`.
+
+Et pendant l'entrainement, le modele apprend ses poids pour que :
+
+```text
+vraie classe -> probabilite proche de 1
+mauvaise classe -> probabilite proche de 0
+```
+
+---
+
+# 8. One-vs-all
+
+La regression logistique de base repond a une question binaire :
+
+```text
+oui ou non ?
+classe 1 ou classe 0 ?
+```
+
+Mais DSLR a 4 maisons.
+
+On utilise donc une strategie one-vs-all.
+
+Le code entraine 4 modeles :
+
+```text
+modele Gryffindor : Gryffindor ou pas Gryffindor ?
+modele Hufflepuff : Hufflepuff ou pas Hufflepuff ?
+modele Ravenclaw  : Ravenclaw ou pas Ravenclaw ?
+modele Slytherin  : Slytherin ou pas Slytherin ?
+```
+
+Chaque modele donne une probabilite.
+
+Exemple :
+
+```text
+Gryffindor : 0.12
+Hufflepuff : 0.25
+Ravenclaw  : 0.87
+Slytherin  : 0.30
+```
+
+On choisit la plus grande :
+
+```text
+prediction = Ravenclaw
+```
+
+C'est ce que fait `logreg_predict.py`.
+
+---
+
+# 9. Descente de gradient
+
+La descente de gradient est la methode qui permet au modele d'apprendre les poids.
+
+Au debut :
+
+```text
+tous les poids = 0
+```
+
+Le modele fait des predictions mauvaises.
+
+Ensuite, pour chaque tour d'entrainement :
+
+1. Il fait une prediction.
+2. Il compare avec la vraie reponse.
+3. Il calcule l'erreur.
+4. Il ajuste un peu les poids.
+5. Il recommence.
+
+Dans le code, l'erreur est :
+
+```python
+err = h - binary_y[i]
+```
+
+- `h` = prediction du modele;
+- `binary_y[i]` = vraie reponse, 0 ou 1.
+
+Puis les poids sont mis a jour :
+
+```python
+w[j] -= lr * grad[j] / m
+```
+
+Avec :
+
+- `lr` = learning rate, la taille du pas;
+- `grad` = direction de correction;
+- `m` = nombre d'exemples.
+
+## Learning rate
+
+Le learning rate controle la taille des corrections.
+
+```text
+learning rate trop grand -> le modele peut devenir instable
+learning rate trop petit -> le modele apprend tres lentement
+```
+
+Dans le code :
+
+```python
+lr = 0.5
+```
+
+## Epochs
+
+Une epoch est un passage complet sur le dataset.
+
+Dans le code :
+
+```python
+epochs = 1000
+```
+
+Cela veut dire que le modele repete l'apprentissage 1000 fois.
+
+---
+
+# 10. Entrainement puis prediction
+
+## `logreg_train.py`
+
+Ce fichier :
+
+1. lit `dataset_train.csv`;
+2. calcule les moyennes et ecarts types;
+3. remplace les valeurs manquantes;
+4. normalise les features;
+5. entraine 4 modeles one-vs-all;
+6. sauvegarde tout dans `weights.json`.
+
+`weights.json` contient :
+
+```text
+features
+houses
+means
+stds
+weights
+```
+
+## `logreg_predict.py`
+
+Ce fichier :
+
+1. lit `dataset_test.csv`;
+2. lit `weights.json`;
+3. applique la meme normalisation;
+4. calcule les probabilites pour les 4 maisons;
+5. choisit la plus grande probabilite;
+6. ecrit `houses.csv`.
+
+Format attendu :
+
+```csv
+Index,Hogwarts House
+0,Gryffindor
+1,Hufflepuff
+2,Ravenclaw
+```
+
+---
+
+# 11. Pipeline complet du projet
+
+```text
+dataset_train.csv
+  |
+  |-- describe.py
+  |     comprendre les statistiques
+  |
+  |-- histogram.py
+  |     voir les distributions
+  |
+  |-- scatter_plot.py
+  |     trouver les features similaires
+  |
+  |-- pair_plot.py
+  |     choisir les features utiles
+  |
+  |-- logreg_train.py
+        apprendre les poids
+        produire weights.json
+
+dataset_test.csv + weights.json
+  |
+  |-- logreg_predict.py
+        produire houses.csv
+```
+
+---
+
+# 12. Ce qu'il faut retenir pour la soutenance
+
+## `describe.py`
+
+Il sert a comprendre les colonnes numeriques :
+
+```text
+moyenne, ecart type, quartiles, min, max
+```
+
+## `histogram.py`
+
+Il sert a comparer les distributions des maisons pour chaque cours.
+
+Une feature homogene separe mal les maisons.
+
+## `scatter_plot.py`
+
+Il sert a trouver deux features similaires avec la correlation de Pearson.
+
+Deux features correlees peuvent etre redondantes.
+
+## `pair_plot.py`
+
+Il sert a voir toutes les relations entre features.
+
+Le F-ratio aide a choisir les features qui separent le mieux les maisons.
+
+## `logreg_train.py`
+
+Il entraine 4 regressions logistiques, une par maison.
+
+Il utilise :
+
+```text
+normalisation
+sigmoid
+one-vs-all
+descente de gradient
+```
+
+## `logreg_predict.py`
+
+Il charge le modele et predit la maison avec la plus grande probabilite.
+
+---
+
+# 13. Resume ultra simple
+
+```text
+describe.py
+  -> comprendre les donnees
+
+histogram.py
+  -> voir si les maisons ont des distributions similaires
+
+scatter_plot.py
+  -> voir si deux features se ressemblent
+
+pair_plot.py
+  -> choisir les features utiles
+
+logreg_train.py
+  -> apprendre les poids du modele
+
+logreg_predict.py
+  -> utiliser les poids pour predire les maisons
+```
+
+La regression logistique fait :
+
+```text
+notes -> score -> sigmoid -> probabilite
+```
+
+Le one-vs-all fait :
+
+```text
+une probabilite par maison
+on choisit la plus grande
 ```

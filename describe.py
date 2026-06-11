@@ -24,10 +24,16 @@ def ft_sum(values):
     return total
 
 
+def get_feature_headers(headers):
+  non_features = ["Index", "Hogwarts House", "First Name", "Last Name",
+                  "Birthday", "Best Hand"]
+  return [header for header in headers if header not in non_features]
+
+
 def read_csv(filename):
   with open(filename, "r", encoding="utf-8") as f:
     reader = csv.DictReader(f)
-    headers = reader.fieldnames
+    headers = get_feature_headers(reader.fieldnames)
     data = {header: [] for header in headers}
 
     for row in reader:
