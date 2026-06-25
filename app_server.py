@@ -249,6 +249,37 @@ def pair_data():
     }
 
 
+def correlation_matrix_data():
+    headers, rows = read_csv_rows(TRAIN_PATH)
+    features = numeric_features(headers)
+    matrix = []
+    pairs = []
+    for row_feature in features:
+        row = []
+        for col_feature in features:
+            x_vals, y_vals = paired_values(rows, row_feature, col_feature)
+            corr = pearson(x_vals, y_vals)
+            row.append(corr)
+        matrix.append(row)
+
+    for i in range(ft_count(features)):
+        for j in range(i + 1, ft_count(features)):
+            x_vals, y_vals = paired_values(rows, features[i], features[j])
+            corr = pearson(x_vals, y_vals)
+            pairs.append({
+                "x": features[i],
+                "y": features[j],
+                "correlation": corr,
+                "absCorrelation": abs(corr),
+            })
+    pairs.sort(key=lambda pair: pair["absCorrelation"], reverse=True)
+    return {
+        "features": features,
+        "matrix": matrix,
+        "topPairs": pairs[:8],
+    }
+
+
 def sigmoid(z):
     if z >= 0:
         return 1.0 / (1.0 + math.exp(-z))
@@ -332,6 +363,83 @@ def multi_accuracy(x_rows, y_rows, all_weights):
         if best_house == y_rows[i]:
             correct += 1
     return correct, 100.0 * correct / len(x_rows)
+
+
+def predict_probs(sample, model):
+    best_house = None
+    best_prob = -1.0
+    probs = {}
+    for house in model["houses"]:
+        weights = model["weights"][house]
+        z = weights[0]
+        for j, value in enumerate(sample):
+            z += weights[j + 1] * value
+        prob = sigmoid(z)
+        probs[house] = prob
+        if prob > best_prob:
+            best_prob = prob
+            best_house = house
+    return best_house, best_prob, probs
+
+
+def sample_from_row(row, model):
+    sample = []
+    used_values = {}
+    for feature in model["features"]:
+        value = row.get(feature, "")
+        if value == "" or not is_float(value):
+            numeric = model["means"][feature]
+        else:
+            numeric = float(value)
+        used_values[feature] = numeric
+        sample.append((numeric - model["means"][feature]) / model["stds"][feature])
+    return sample, used_values
+
+
+def load_model():
+    if not os.path.exists(WEIGHTS_PATH):
+        return None
+    with open(WEIGHTS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def evaluate_model():
+    model = load_model()
+    if model is None:
+        return {"error": "weights.json is missing. Train the model first."}
+
+    _, rows = read_csv_rows(TRAIN_PATH)
+    matrix = {actual: {pred: 0 for pred in HOUSES} for actual in HOUSES}
+    mistakes = []
+    correct = 0
+    total = 0
+    for row in rows:
+        actual = row.get("Hogwarts House", "")
+        if actual not in HOUSES:
+            continue
+        sample, _ = sample_from_row(row, model)
+        predicted, probability, probs = predict_probs(sample, model)
+        matrix[actual][predicted] += 1
+        total += 1
+        if predicted == actual:
+            correct += 1
+        elif ft_count(mistakes) < 12:
+            mistakes.append({
+                "index": row.get("Index", ""),
+                "actual": actual,
+                "predicted": predicted,
+                "probability": probability,
+                "probabilities": probs,
+            })
+    accuracy = 100.0 * correct / total if total else 0.0
+    return {
+        "houses": HOUSES,
+        "matrix": matrix,
+        "correct": correct,
+        "total": total,
+        "accuracy": accuracy,
+        "mistakes": mistakes,
+    }
 
 
 def train_events():
@@ -418,39 +526,18 @@ def train_events():
 
 
 def predict():
-    if not os.path.exists(WEIGHTS_PATH):
+    model = load_model()
+    if model is None:
         return {"error": "weights.json is missing. Train the model first."}
 
-    with open(WEIGHTS_PATH, "r", encoding="utf-8") as f:
-        model = json.load(f)
     _, rows = read_csv_rows(TEST_PATH)
 
     predictions = []
     counts = {house: 0 for house in HOUSES}
     preview = []
     for index, row in enumerate(rows):
-        sample = []
-        for feature in model["features"]:
-            value = row.get(feature, "")
-            if value == "" or not is_float(value):
-                numeric = model["means"][feature]
-            else:
-                numeric = float(value)
-            sample.append((numeric - model["means"][feature]) / model["stds"][feature])
-
-        best_house = None
-        best_prob = -1.0
-        probs = {}
-        for house in model["houses"]:
-            weights = model["weights"][house]
-            z = weights[0]
-            for j, value in enumerate(sample):
-                z += weights[j + 1] * value
-            prob = sigmoid(z)
-            probs[house] = prob
-            if prob > best_prob:
-                best_prob = prob
-                best_house = house
+        sample, _ = sample_from_row(row, model)
+        best_house, best_prob, probs = predict_probs(sample, model)
 
         counts[best_house] += 1
         predictions.append((index, best_house))
@@ -541,6 +628,10 @@ class AppHandler(BaseHTTPRequestHandler):
                 return self.send_json(scatter_data(x_feature, y_feature))
             if path == "/api/pair":
                 return self.send_json(pair_data())
+            if path == "/api/correlation":
+                return self.send_json(correlation_matrix_data())
+            if path == "/api/evaluation":
+                return self.send_json(evaluate_model())
             if path == "/api/predict":
                 return self.send_json(predict())
             if path == "/api/train-stream":

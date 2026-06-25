@@ -24,6 +24,7 @@
         <button class="nav" data-view="pair">Pair plot</button>
         <button class="nav" data-view="train">Train</button>
         <button class="nav" data-view="predict">Predict</button>
+        <button class="nav" data-view="bonus">Bonus</button>
       </aside>
 
       <section class="content">
@@ -180,6 +181,52 @@
               <h3>Apercu des predictions</h3>
               <div class="table-wrap small">
                 <table id="predictTable"></table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-bonus">
+          <div class="section-head">
+            <h2>Bonus</h2>
+            <span>Analyse avancee et evaluation</span>
+          </div>
+
+          <div class="bonus-grid">
+            <div class="panel graph-panel">
+              <div class="panel-title">
+                <h3>Heatmap de correlation</h3>
+                <span>Pearson entre toutes les features</span>
+              </div>
+              <canvas id="corrCanvas"></canvas>
+            </div>
+            <div class="panel">
+              <div class="panel-title">
+                <h3>Features les plus correlees</h3>
+                <span>Pairs potentiellement redondantes</span>
+              </div>
+              <div class="rank-list" id="corrPairs"></div>
+            </div>
+          </div>
+
+          <div class="bonus-grid single">
+            <div class="panel graph-panel">
+              <div class="panel-title">
+                <h3>Scatter de la paire selectionnee</h3>
+                <span id="bonusScatterTitle">Clique sur une paire correlee</span>
+              </div>
+              <canvas id="bonusScatterCanvas"></canvas>
+            </div>
+          </div>
+
+          <div class="bonus-grid single">
+            <div class="panel">
+              <div class="panel-title">
+                <h3>Matrice de confusion</h3>
+                <span id="confusionState">Modele a evaluer</span>
+              </div>
+              <div class="table-wrap small">
+                <table id="confusionTable"></table>
               </div>
             </div>
           </div>

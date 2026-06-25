@@ -2,6 +2,9 @@ const state = {
   summary: null,
   features: [],
   colors: {},
+  describe: null,
+  correlation: null,
+  bonusScatter: null,
   trainSeries: {},
   accSeries: {},
   trainMeta: {
@@ -215,6 +218,117 @@ function drawLineChart(canvas, series, yLabel) {
   drawLegend(ctx, width, houseOrder, state.colors);
 }
 
+function shortFeatureName(feature) {
+  return feature
+    .replace("Defense Against the Dark Arts", "Defense")
+    .replace("Care of Magical Creatures", "Creatures")
+    .replace("History of Magic", "History")
+    .replace("Muggle Studies", "Muggle")
+    .replace("Ancient Runes", "Runes");
+}
+
+function corrColor(value) {
+  const strength = Math.min(1, Math.abs(value));
+  if (value >= 0) {
+    const r = Math.round(239 - 189 * strength);
+    const g = Math.round(246 - 92 * strength);
+    const b = Math.round(255 - 36 * strength);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  const r = Math.round(254 - 69 * strength);
+  const g = Math.round(242 - 146 * strength);
+  const b = Math.round(242 - 89 * strength);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function drawCorrelationHeatmap(canvas, data) {
+  const { ctx, width, height } = fitCanvas(canvas);
+  clear(ctx, width, height);
+  const features = data.features;
+  const margin = { top: 18, right: 18, bottom: 178, left: 122 };
+  const size = Math.min(
+    (width - margin.left - margin.right) / features.length,
+    (height - margin.top - margin.bottom) / features.length
+  );
+  const startX = margin.left;
+  const startY = margin.top;
+
+  ctx.font = "10px system-ui";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  features.forEach((feature, i) => {
+    ctx.fillStyle = "#475569";
+    ctx.fillText(shortFeatureName(feature), startX - 8, startY + i * size + size / 2);
+  });
+
+  features.forEach((feature, i) => {
+    ctx.save();
+    ctx.translate(startX + i * size + size / 2, startY + features.length * size + 18);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillStyle = "#475569";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillText(shortFeatureName(feature), 0, 0);
+    ctx.restore();
+  });
+
+  data.matrix.forEach((row, y) => {
+    row.forEach((value, x) => {
+      ctx.fillStyle = corrColor(value);
+      ctx.fillRect(startX + x * size, startY + y * size, size, size);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(startX + x * size, startY + y * size, size, size);
+      if (size >= 30) {
+        ctx.fillStyle = Math.abs(value) > 0.72 ? "#ffffff" : "#0f172a";
+        ctx.font = "10px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(value.toFixed(2), startX + x * size + size / 2, startY + y * size + size / 2);
+      }
+    });
+  });
+
+  const legendW = Math.min(260, width - margin.left - margin.right);
+  const legendH = 10;
+  const legendX = startX;
+  const legendY = Math.min(height - 34, startY + features.length * size + 132);
+  const gradient = ctx.createLinearGradient(legendX, 0, legendX + legendW, 0);
+  gradient.addColorStop(0, corrColor(-1));
+  gradient.addColorStop(0.5, corrColor(0));
+  gradient.addColorStop(1, corrColor(1));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(legendX, legendY, legendW, legendH);
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.strokeRect(legendX, legendY, legendW, legendH);
+  ctx.fillStyle = "#475569";
+  ctx.font = "11px system-ui";
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+  ctx.fillText("-1 negative", legendX, legendY + 15);
+  ctx.textAlign = "center";
+  ctx.fillText("0 faible", legendX + legendW / 2, legendY + 15);
+  ctx.textAlign = "right";
+  ctx.fillText("+1 positive", legendX + legendW, legendY + 15);
+}
+
+function renderCorrelationPairs(data) {
+  $("#corrPairs").innerHTML = data.topPairs.map((pair) => `
+    <button class="rank-row" data-x="${pair.x}" data-y="${pair.y}">
+      <div>
+        <strong>${pair.x}</strong>
+        <span>${pair.y}</span>
+      </div>
+      <div class="rank-score">r ${pair.correlation.toFixed(3)}</div>
+    </button>
+  `).join("");
+  all("#corrPairs .rank-row").forEach((button) => {
+    button.addEventListener("click", () => {
+      loadBonusScatter(button.dataset.x, button.dataset.y);
+    });
+  });
+}
+
 function renderMetrics(summary) {
   const items = [
     ["Train samples", summary.trainRows],
@@ -240,6 +354,7 @@ function fillFeatureSelects(features) {
 
 async function loadDescribe() {
   const data = await api("/api/describe");
+  state.describe = data;
   const rows = ["Count", "Mean", "Std", "Min", "25%", "50%", "75%", "Max"];
   const head = `<tr><th>Stat</th>${data.features.map((f) => `<th>${f}</th>`).join("")}</tr>`;
   const body = rows.map((row) => `
@@ -249,6 +364,7 @@ async function loadDescribe() {
     </tr>
   `).join("");
   $("#describeTable").innerHTML = head + body;
+  return data;
 }
 
 async function loadHistogram() {
@@ -349,6 +465,60 @@ async function loadPair() {
       grid.appendChild(cell);
     });
   });
+}
+
+async function loadCorrelation() {
+  state.correlation = await api("/api/correlation");
+  drawCorrelationHeatmap($("#corrCanvas"), state.correlation);
+  renderCorrelationPairs(state.correlation);
+  const firstPair = state.correlation.topPairs[0];
+  if (firstPair) await loadBonusScatter(firstPair.x, firstPair.y);
+}
+
+async function loadBonusScatter(xFeature, yFeature) {
+  const x = encodeURIComponent(xFeature);
+  const y = encodeURIComponent(yFeature);
+  const data = await api(`/api/scatter?x=${x}&y=${y}`);
+  state.bonusScatter = data;
+  $("#bonusScatterTitle").textContent =
+    `${data.xFeature} vs ${data.yFeature} | r = ${data.correlation.toFixed(4)}`;
+  all("#corrPairs .rank-row").forEach((button) => {
+    const isActive = button.dataset.x === data.xFeature && button.dataset.y === data.yFeature;
+    button.classList.toggle("active", isActive);
+  });
+  drawScatter($("#bonusScatterCanvas"), data);
+}
+
+async function loadEvaluation() {
+  const data = await api("/api/evaluation");
+  if (data.error) {
+    $("#confusionState").textContent = data.error;
+    $("#confusionTable").innerHTML = "";
+    return;
+  }
+  $("#confusionState").textContent =
+    `${data.correct}/${data.total} corrects - ${data.accuracy.toFixed(2)}%`;
+  const head = `<tr><th>Reel \\ Predit</th>${data.houses.map((house) => `<th>${house}</th>`).join("")}<th>Total</th></tr>`;
+  const body = data.houses.map((actual) => {
+    const total = data.houses.reduce((sum, predicted) => sum + data.matrix[actual][predicted], 0);
+    return `
+      <tr>
+        <td>${actual}</td>
+        ${data.houses.map((predicted) => {
+          const value = data.matrix[actual][predicted];
+          const cls = actual === predicted ? " class=\"diag-cell\"" : "";
+          return `<td${cls}>${value}</td>`;
+        }).join("")}
+        <td>${total}</td>
+      </tr>
+    `;
+  }).join("");
+  $("#confusionTable").innerHTML = head + body;
+}
+
+async function loadBonus() {
+  await loadCorrelation();
+  await loadEvaluation();
 }
 
 function logLine(text) {
@@ -563,6 +733,7 @@ function startTraining() {
       logLine(`Training accuracy: ${event.correct}/${event.total} (${event.accuracy.toFixed(2)}%)`);
       logLine(`Model saved to ${event.weightsPath}`);
       setTrainState(`Termine - ${event.accuracy.toFixed(2)}%`, "done");
+      loadEvaluation();
       $("#startTrain").disabled = false;
       source.close();
     }
@@ -626,6 +797,10 @@ function redrawVisible() {
     drawLineChart($("#lossCanvas"), state.trainSeries, "loss");
     drawLineChart($("#accCanvas"), state.accSeries, "accuracy");
   }
+  if ($("#view-bonus").classList.contains("active") && state.correlation) {
+    drawCorrelationHeatmap($("#corrCanvas"), state.correlation);
+    if (state.bonusScatter) drawScatter($("#bonusScatterCanvas"), state.bonusScatter);
+  }
 }
 
 async function init() {
@@ -646,6 +821,7 @@ async function init() {
   await loadHistogram();
   await loadScatter(true);
   await loadPair();
+  await loadBonus();
   resetTrainingUi();
   resetTrainingCharts();
 

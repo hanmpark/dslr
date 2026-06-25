@@ -290,6 +290,12 @@ th {
   color: #334155;
 }
 
+.diag-cell {
+  background: #ecfdf5;
+  color: #047857;
+  font-weight: 800;
+}
+
 canvas {
   display: block;
   width: 100%;
@@ -304,8 +310,14 @@ canvas {
 #lossCanvas,
 #accCanvas,
 #predictChart,
-#houseChart {
+#houseChart,
+#corrCanvas,
+#bonusScatterCanvas {
   height: 320px;
+}
+
+#corrCanvas {
+  height: 470px;
 }
 
 .graph-title {
@@ -574,6 +586,65 @@ canvas {
   margin-top: 16px;
 }
 
+.bonus-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  gap: 16px;
+}
+
+.bonus-grid.single {
+  grid-template-columns: 1fr;
+}
+
+.rank-list {
+  display: grid;
+  gap: 8px;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  height: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.rank-row:hover,
+.rank-row.active {
+  border-color: var(--accent);
+  background: #eef2ff;
+}
+
+.rank-row.active {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.rank-row strong {
+  display: block;
+  font-size: 13px;
+}
+
+.rank-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rank-score {
+  min-width: 74px;
+  text-align: right;
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
 pre {
   min-height: 220px;
   max-height: 340px;
@@ -614,6 +685,7 @@ pre {
   .train-hero,
   .train-stats,
   .house-grid,
+  .bonus-grid,
   .flow {
     grid-template-columns: 1fr;
   }
