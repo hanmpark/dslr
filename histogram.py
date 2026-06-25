@@ -85,46 +85,6 @@ def main():
     plt.subplots_adjust(hspace=0.5)
     plt.show()
 
-    best_feature = find_most_homogeneous(features, houses, data_by_house)
-    print(f"\nThe course with the most homogeneous score distribution across"
-          f" all four houses is '{best_feature}'.")
-
-
-def ft_mean(values):
-    return sum(values) / len(values)
-
-
-def ft_std(values):
-    m = ft_mean(values)
-    return (sum((v - m) ** 2 for v in values) / len(values)) ** 0.5
-
-
-def find_most_homogeneous(features, houses, data_by_house):
-    best_feature = None
-    best_score = float("inf")
-
-    for feature in features:
-        house_data = [data_by_house[h][feature] for h in houses
-                      if len(data_by_house[h][feature]) > 1]
-        if len(house_data) < 2:
-            continue
-
-        house_means = [ft_mean(d) for d in house_data]
-        house_stds = [ft_std(d) for d in house_data]
-        avg_within_std = ft_mean(house_stds)
-
-        if avg_within_std == 0:
-            continue
-
-        # Ratio: spread of means relative to average within-house spread
-        # A low ratio means all houses have similar distributions
-        score = ft_std(house_means) / avg_within_std
-        if score < best_score:
-            best_score = score
-            best_feature = feature
-
-    return best_feature
-
 
 if __name__ == "__main__":
     main()
