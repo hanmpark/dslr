@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DSLR Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>DSLR Dashboard</h1>
+        <p>Exploration, entrainement live et prediction Hogwarts</p>
+      </div>
+      <div class="status" id="status">Chargement...</div>
+    </header>
+
+    <main class="layout">
+      <aside class="side">
+        <button class="nav active" data-view="overview">Vue generale</button>
+        <button class="nav" data-view="describe">Describe</button>
+        <button class="nav" data-view="histogram">Histogram</button>
+        <button class="nav" data-view="scatter">Scatter</button>
+        <button class="nav" data-view="pair">Pair plot</button>
+        <button class="nav" data-view="train">Train</button>
+        <button class="nav" data-view="predict">Predict</button>
+      </aside>
+
+      <section class="content">
+        <section class="view active" id="view-overview">
+          <div class="section-head">
+            <h2>Vue generale</h2>
+            <span>Pipeline complet du projet</span>
+          </div>
+          <div class="metric-grid" id="metrics"></div>
+          <div class="panel">
+            <h3>Maisons dans le train set</h3>
+            <canvas id="houseChart" height="180"></canvas>
+          </div>
+          <div class="flow">
+            <div>describe.py</div>
+            <div>histogram.py</div>
+            <div>scatter_plot.py</div>
+            <div>pair_plot.py</div>
+            <div>logreg_train.py</div>
+            <div>logreg_predict.py</div>
+          </div>
+        </section>
+
+        <section class="view" id="view-describe">
+          <div class="section-head">
+            <h2>Describe</h2>
+            <span>Statistiques descriptives des features</span>
+          </div>
+          <div class="table-wrap">
+            <table id="describeTable"></table>
+          </div>
+        </section>
+
+        <section class="view" id="view-histogram">
+          <div class="section-head">
+            <h2>Histogram</h2>
+            <span>Distribution par maison</span>
+          </div>
+          <div class="toolbar">
+            <label for="histFeature">Feature</label>
+            <select id="histFeature"></select>
+          </div>
+          <div class="panel graph-panel">
+            <canvas id="histCanvas"></canvas>
+          </div>
+        </section>
+
+        <section class="view" id="view-scatter">
+          <div class="section-head">
+            <h2>Scatter</h2>
+            <span>Correlation automatique ou choix manuel</span>
+          </div>
+          <div class="toolbar wrap">
+            <button id="autoScatter">Auto correlation</button>
+            <label for="scatterX">X</label>
+            <select id="scatterX"></select>
+            <label for="scatterY">Y</label>
+            <select id="scatterY"></select>
+            <button id="showScatter">Afficher</button>
+          </div>
+          <div class="panel graph-panel">
+            <div class="graph-title" id="scatterTitle"></div>
+            <canvas id="scatterCanvas"></canvas>
+          </div>
+        </section>
+
+        <section class="view" id="view-pair">
+          <div class="section-head">
+            <h2>Pair plot</h2>
+            <span>Triangle inferieur, sans doublons</span>
+          </div>
+          <div class="pair-wrap" id="pairGrid"></div>
+        </section>
+
+        <section class="view" id="view-train">
+          <div class="section-head">
+            <h2>Train live</h2>
+            <span>Descente de gradient one-vs-all</span>
+          </div>
+          <div class="train-hero">
+            <div class="train-actions">
+              <button id="startTrain">Lancer l'entrainement</button>
+              <span class="pill idle" id="trainState">Pret</span>
+            </div>
+            <div class="train-progress">
+              <div class="progress-head">
+                <span>Progression globale</span>
+                <strong id="trainProgressText">0%</strong>
+              </div>
+              <div class="progress">
+                <div class="progress-bar" id="trainProgressBar"></div>
+              </div>
+            </div>
+            <div class="train-stats">
+              <div class="live-stat">
+                <span>Maison</span>
+                <strong id="currentHouse">-</strong>
+              </div>
+              <div class="live-stat">
+                <span>Epoch</span>
+                <strong id="currentEpoch">-</strong>
+              </div>
+              <div class="live-stat">
+                <span>Loss</span>
+                <strong id="currentLoss">-</strong>
+              </div>
+              <div class="live-stat">
+                <span>Accuracy</span>
+                <strong id="currentAccuracy">-</strong>
+              </div>
+            </div>
+          </div>
+          <div class="house-grid" id="houseCards"></div>
+          <div class="train-grid">
+            <div class="panel graph-panel">
+              <div class="panel-title">
+                <h3>Loss par maison</h3>
+                <span>Doit descendre quand le modele apprend</span>
+              </div>
+              <canvas id="lossCanvas"></canvas>
+            </div>
+            <div class="panel graph-panel">
+              <div class="panel-title">
+                <h3>Accuracy binaire</h3>
+                <span>Score de chaque classifieur one-vs-all</span>
+              </div>
+              <canvas id="accCanvas"></canvas>
+            </div>
+          </div>
+          <div class="panel log-panel">
+            <div class="panel-title">
+              <h3>Journal</h3>
+              <span>Evenements importants de l'entrainement</span>
+            </div>
+            <pre id="trainLog"></pre>
+          </div>
+        </section>
+
+        <section class="view" id="view-predict">
+          <div class="section-head">
+            <h2>Predict</h2>
+            <span>Generation de houses.csv</span>
+          </div>
+          <div class="toolbar">
+            <button id="runPredict">Predire dataset_test.csv</button>
+            <span id="predictState">En attente</span>
+          </div>
+          <div class="train-grid">
+            <div class="panel graph-panel">
+              <h3>Repartition predite</h3>
+              <canvas id="predictChart"></canvas>
+            </div>
+            <div class="panel">
+              <h3>Apercu des predictions</h3>
+              <div class="table-wrap small">
+                <table id="predictTable"></table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
