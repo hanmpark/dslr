@@ -54,7 +54,8 @@ def main():
     n_features = len(features)
     n_cols = 3
     n_rows = (n_features + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, n_rows * 4))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(15, n_rows * 4),
+                             constrained_layout=True)
     fig.suptitle("Score Distribution by House for Each Course", fontsize=14)
 
     for i, feature in enumerate(features):
@@ -72,7 +73,6 @@ def main():
         ax.set_xlabel("Score", fontsize=8)
         ax.set_ylabel("Frequency", fontsize=8)
         ax.tick_params(labelsize=7)
-        ax.legend(fontsize=7)
 
     # Hide unused subplots
     for i in range(n_features, n_rows * n_cols):
@@ -81,8 +81,11 @@ def main():
         ax = axes[row_idx][col_idx] if n_rows > 1 else axes[col_idx]
         ax.set_visible(False)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.97])
-    plt.subplots_adjust(hspace=0.5)
+    handles = [
+        plt.Line2D([0], [0], color=colors[house], linewidth=6, label=house)
+        for house in houses
+    ]
+    fig.legend(handles=handles, loc="upper right", fontsize=9)
     plt.show()
 
 

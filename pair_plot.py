@@ -115,7 +115,8 @@ def main():
     }
 
     n = len(features)
-    fig, axes = plt.subplots(n, n, figsize=(n * 1.5, n * 1.5))
+    fig, axes = plt.subplots(n, n, figsize=(n * 1.5, n * 1.5),
+                             constrained_layout=True)
     fig.suptitle("Pair Plot - Hogwarts Dataset", fontsize=14, y=1.01)
 
     for i in range(n):
@@ -123,6 +124,10 @@ def main():
             ax = axes[i][j]
             ax.tick_params(left=False, bottom=False,
                            labelleft=False, labelbottom=False)
+
+            if j > i:
+                ax.set_visible(False)
+                continue
 
             if i == j:
                 make_histogram(ax, rows, features[i], houses, colors)
@@ -146,7 +151,6 @@ def main():
     fig.legend(handles=handles, loc="upper right", fontsize=8,
                bbox_to_anchor=(1.08, 1.0))
 
-    plt.tight_layout()
     plt.show()
 
 
