@@ -18,6 +18,8 @@ FEATURES = [
     'Care of Magical Creatures', 'Charms', 'Flying'
 ]
 HOUSES = ['Gryffindor', 'Hufflepuff', 'Ravenclaw', 'Slytherin']
+LOG_INTERVAL = 100
+EPSILON = 1e-15
 
 
 def sigmoid(z):
@@ -35,14 +37,18 @@ def load_and_preprocess(filepath):
 
     # Compute means (for NaN filling)
     raw = {feat: [] for feat in FEATURES}
+    missing = {feat: 0 for feat in FEATURES}
+    invalid = {feat: 0 for feat in FEATURES}
     for row in rows:
         for feat in FEATURES:
             v = row.get(feat, '')
-            if v != '':
-                try:
-                    raw[feat].append(float(v))
-                except ValueError:
-                    pass
+            if v == '':
+                missing[feat] += 1
+                continue
+            try:
+                raw[feat].append(float(v))
+            except ValueError:
+                invalid[feat] += 1
 
     means = {}
     stds = {}
@@ -75,7 +81,18 @@ def load_and_preprocess(filepath):
         X.append(sample)
         y.append(row.get('Hogwarts House', ''))
 
-    return X, y, means, stds
+    return X, y, means, stds, missing, invalid
+
+
+def print_preprocess_summary(means, stds, missing, invalid):
+    print("\nPreprocessing summary")
+    print(f"{'Feature':<35} {'mean':>12} {'std':>12} {'missing':>9} {'invalid':>9}")
+    print("-" * 82)
+    for feat in FEATURES:
+        print(f"{feat:<35} {means[feat]:>12.4f} {stds[feat]:>12.4f}"
+              f" {missing[feat]:>9} {invalid[feat]:>9}")
+    print("\nMissing or invalid values are replaced with the training mean,")
+    print("then each feature is normalized with z-score: (value - mean) / std.\n")
 
 
 def train_binary(X, binary_y, lr=0.5, epochs=1000):
@@ -84,18 +101,33 @@ def train_binary(X, binary_y, lr=0.5, epochs=1000):
     n = len(X[0])
     w = [0.0] * (n + 1)  # w[0] = bias
 
-    for _ in range(epochs):
+    for epoch in range(epochs):
         grad = [0.0] * (n + 1)
+        total_loss = 0.0
+        correct = 0
         for i in range(m):
             z = w[0] + sum(w[j + 1] * X[i][j] for j in range(n))
             h = sigmoid(z)
             err = h - binary_y[i]
+            safe_h = min(max(h, EPSILON), 1.0 - EPSILON)
+            total_loss += -(binary_y[i] * math.log(safe_h)
+                            + (1.0 - binary_y[i]) * math.log(1.0 - safe_h))
+            if (h >= 0.5) == (binary_y[i] == 1.0):
+                correct += 1
             grad[0] += err
             for j in range(n):
                 grad[j + 1] += err * X[i][j]
         for j in range(n + 1):
             w[j] -= lr * grad[j] / m
 
+        if epoch == 0 or (epoch + 1) % LOG_INTERVAL == 0 or epoch == epochs - 1:
+            avg_loss = total_loss / m
+            accuracy = 100.0 * correct / m
+            print(f"    epoch {epoch + 1:4d}/{epochs}"
+                  f" - loss: {avg_loss:.6f}"
+                  f" - binary acc: {accuracy:6.2f}%")
+
+    print(f"    learned bias: {w[0]:.6f}")
     return w
 
 
@@ -104,17 +136,19 @@ def main():
         print("Usage: python3 logreg_train.py <dataset_train.csv>")
         sys.exit(1)
 
-    X, y, means, stds = load_and_preprocess(sys.argv[1])
+    X, y, means, stds, missing, invalid = load_and_preprocess(sys.argv[1])
     print(f"Loaded {len(X)} samples, {len(FEATURES)} features.")
+    print_preprocess_summary(means, stds, missing, invalid)
 
     weights = {}
     for house in HOUSES:
         binary_y = [1.0 if yi == house else 0.0 for yi in y]
         pos = int(sum(binary_y))
-        print(f"  Training {house} ({pos} positive)...", end=" ", flush=True)
+        neg = len(binary_y) - pos
+        print(f"Training {house}: {pos} positive / {neg} negative")
         w = train_binary(X, binary_y, lr=0.5, epochs=1000)
         weights[house] = w
-        print("done.")
+        print(f"Finished {house}.\n")
 
     # Training accuracy
     correct = 0
